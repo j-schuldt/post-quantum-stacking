@@ -1,0 +1,70 @@
+\documentclass[11pt]{article}
+
+% General-purpose cryptography paper template.
+% For submission, replace the document class and layout with the venue's style.
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage[nameinlink,noabbrev]{cleveref}
+\usepackage[backend=biber]{biblatex}
+\addbibresource{cryptobib/crypto.bib}
+
+% Theorems share a counter within each section.
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% Cryptographic notation. Adjust conventions to match the paper.
+\newcommand{\secpar}{\lambda}
+\newcommand{\bits}{\{0,1\}}
+\newcommand{\getsr}{\mathrel{\overset{\$}{\leftarrow}}}
+\newcommand{\negl}{\operatorname{negl}}
+\newcommand{\poly}{\operatorname{poly}}
+\newcommand{\Adv}{\operatorname{Adv}}
+\newcommand{\A}{\mathcal{A}}
+\newcommand{\B}{\mathcal{B}}
+
+\DeclarePairedDelimiter{\abs}{\lvert}{\rvert}
+\DeclarePairedDelimiter{\norm}{\lVert}{\rVert}
+
+
+\title{Paper Title}
+\author{}
+\date{} % Add a date for a dated preprint, if desired.
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Abstract.
+\end{abstract}
+
+\noindent\textbf{Keywords:} cryptography
+
+\section{Introduction}\label{sec:introduction}
+
+\section{Construction}
+
+\printbibliography
+
+\appendix
+\section{Additional Proofs}\label{app:proofs}
+Proofs.
+
+\end{document}
