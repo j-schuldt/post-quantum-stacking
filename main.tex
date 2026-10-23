@@ -1,24 +1,17 @@
 \documentclass[11pt]{article}
-
-% General-purpose cryptography paper template.
-% For submission, replace the document class and layout with the venue's style.
+% Research investigation; no security theorem for the concrete candidate is claimed.
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage[margin=1in]{geometry}
 \usepackage{microtype}
 \usepackage{amsmath,amssymb,amsthm,mathtools}
-\usepackage{enumitem}
-\usepackage{booktabs}
-\usepackage{graphicx}
-\usepackage{algorithm}
-\usepackage{algpseudocode}
-\usepackage{xcolor}
+\usepackage{enumitem,booktabs,graphicx,algorithm,algpseudocode,xcolor}
 \usepackage[hidelinks]{hyperref}
 \usepackage[nameinlink,noabbrev]{cleveref}
 \usepackage[backend=biber]{biblatex}
+\addbibresource{cryptobib/abbrev3.bib}
 \addbibresource{cryptobib/crypto.bib}
-
-% Theorems share a counter within each section.
+\addbibresource{investigation.bib}
 \theoremstyle{plain}
 \newtheorem{theorem}{Theorem}[section]
 \newtheorem{lemma}[theorem]{Lemma}
@@ -29,42 +22,1130 @@
 \newtheorem{assumption}[theorem]{Assumption}
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
-
-% Cryptographic notation. Adjust conventions to match the paper.
 \newcommand{\secpar}{\lambda}
 \newcommand{\bits}{\{0,1\}}
 \newcommand{\getsr}{\mathrel{\overset{\$}{\leftarrow}}}
 \newcommand{\negl}{\operatorname{negl}}
 \newcommand{\poly}{\operatorname{poly}}
 \newcommand{\Adv}{\operatorname{Adv}}
-\newcommand{\A}{\mathcal{A}}
-\newcommand{\B}{\mathcal{B}}
-
+\newcommand{\A}{\mathcal A}
+\newcommand{\B}{\mathcal B}
+\newcommand{\F}{\mathbb F}
+\newcommand{\Ftwo}{\mathbb F_2}
+\newcommand{\bad}{\perp}
+\newcommand{\Enc}{\mathsf{Enc}}
+\newcommand{\Dec}{\mathsf{Dec}}
+\newcommand{\Gen}{\mathsf{FGen}}
+\newcommand{\Punc}{\mathsf{FPunc}}
+\newcommand{\Rec}{\mathsf{FRec}}
+\newcommand{\Ser}{\mathsf{ser}}
 \DeclarePairedDelimiter{\abs}{\lvert}{\rvert}
 \DeclarePairedDelimiter{\norm}{\lVert}{\rVert}
-
-
-\title{Paper Title}
+\setlist{nosep}
+\emergencystretch=2em
+\title{Post-Quantum Stacking:\\Candidate Specification and Security Investigation}
 \author{}
-\date{} % Add a date for a dated preprint, if desired.
-
+\date{22 October 2026}
 \begin{document}
 \maketitle
-
 \begin{abstract}
-Abstract.
+We specify a delayed-relation candidate commitment using multiple correlated
+GGM forests, and identify an index-disclosure mechanism in its unmasked
+coefficient response. An explicit four-entry example
+distinguishes two compatible indices with constant advantage, without
+cryptographic assumptions. Repeated punctured openings also expose complementary
+shares. An adaptive pre-tree-key construction also shows that the puncturing
+structure alone does not enforce common witness sums across trees.
+These issues precede any proof of stacking security. We give typed
+algorithms, honest-execution identities, conditional soundness bounds, security
+experiments, and unresolved obligations. The source algorithms and revised stacking definitions are inspected directly;
+their security theorems do not establish security of this adaptation.
+We do not claim a secure equivocal commitment or stacking compiler.
 \end{abstract}
 
-\noindent\textbf{Keywords:} cryptography
+\section{Scope, provenance, and stopping points}\label{sec:scope}
+The authoritative input is the local research state
+\texttt{research-notes/projects/Post-Quantum Stacking.md}, read on
+22 October 2026. The original research-state file is unchanged.
+The commitment is generated before the opening vector is known, and we retain
+the prescribed order
+\begin{equation}\label{eq:order}
+ c\longrightarrow X\longrightarrow(\boldsymbol\alpha,\boldsymbol\beta)
+ \longrightarrow\pi_1\longrightarrow J\longrightarrow\rho.
+\end{equation}
+All messages after $c$ belong to opening. There is no commitment key with a
+preselected binding coordinate in this candidate. Binding is targeted per
+commitment, not across all commitments under common parameters.
 
-\section{Introduction}\label{sec:introduction}
+\paragraph{Sources and provenance.}
+The source copies inspected are the 37-page Huth--Joux revision of ePrint
+2024/1537 (archive revision dated 5 September 2025), and the 57-page revised
+\emph{Stacking Sigmas}, ePrint 2021/422~\cite{investigation:HJ,investigation:Stacking}.
+They were retrieved through the ePrint mirror after the main PDF endpoint
+returned an access error. We inspect Huth--Joux Sections 2.4--5, Figures
+3, 7, and 8, and Appendix A; Stacking Sigmas Definition 4, Figure 5,
+Theorem 5 and its proof, and Appendix C; and the relevant definitions of
+Avitabile et al.~\cite{investigation:ABFV}.
+The formalization below completes serialization and domain labels explicitly.
+A previous local manuscript draft in the user's ChatGPT export directory
+provided preliminary algebraic examples, independently checked here.
+The authoritative research state remains the specified research-notes file.
 
-\section{Construction}
+\paragraph{Status labels.}
+\emph{Established algebra} means proved here from stated equations.
+\emph{Conditional} identifies a missing forest or distribution hypothesis.
+\emph{Unresolved} marks an unproved cryptographic claim. A \emph{proposed change} is not part of the retained candidate.
+The most consequential findings are the coefficient leak in
+\cref{sec:leak} and the pre-tree counterexample in \cref{sec:pretreeattack}.
+No repair is silently substituted for the candidate.
+
+\section{Parameters and types}\label{sec:types}
+Let $\lambda\geq1$ be the computational security parameter and the raw
+forest-block length, $h\geq1$ the value length, $n\geq2$ the number of entries,
+$q=\lceil\log_2 n\rceil\leq\lambda$, $m=\lceil h/\lambda\rceil$, and $t=m+1$.
+Indices are zero-based: $[v]=\{0,\ldots,v-1\}$ for positive integers $v$.
+Let $D,\tau\geq1$ be tree parameters, $N=2^D$, and $M=\tau D$.
+Generation costs include $2^\tau$ pre-tree leaves; an asymptotic parameter
+family intended to be efficient must have $2^\tau+\tau2^D$ polynomially
+bounded in $\lambda$ and the public input length.
+No concrete secure choice of $D,\tau$ is asserted. Requiring the stronger
+concrete target $M\geq\lambda$ forces $\max(D,\tau)\geq\sqrt\lambda$
+and hence a superpolynomial tree cost as a function of $\lambda$ alone.
+Polynomial tree cost still permits $M=\Theta(\log^2\lambda)$ and
+negligible $2^{-M}$, but not $2^{-\lambda}$ via this parameterization.
+For example, $\tau=16,D=8$ gives $M=128$, with $2^{16}$ pre-tree leaves
+per forest; this is a cost illustration, not a security recommendation.
+The evaluation field is $\F=\mathbb F_{2^\kappa}$ with a fixed irreducible
+polynomial, fixed binary basis, and canonical field-element serialization;
+$Q=|\F|=2^\kappa$. The parameters $\kappa$ and $\lambda$ are distinct.
+Set $K=t\lambda$. Fix a salt length $s$ and digest length $\ell$; security
+losses from these lengths require separate analysis.
+
+\paragraph{Encoding.}
+$\Enc(x,i)=\mathbf w\in\Ftwo^K$ splits $x\in\bits^h$ into $m$ consecutive
+$\lambda$-bit blocks, zero-pads the last block, and appends a separate
+$\lambda$-bit block containing the $q$ low-to-high bits of $i$, followed
+by zeros. Let $\mathbf w_a\in\Ftwo^\lambda$ be block $a$.
+$\Dec$ checks all padding bits and checks $i<n$; otherwise it returns
+$\bad$. The index is never reduced modulo $n$.
+Let $z=(z_1,\ldots,z_K)$ denote the corresponding formal variables over $\F$;
+$x_u$ and $b_r$ refer to their specified positions.
+
+\paragraph{A necessary type clarification.}
+In the bit-polynomial interpretation, an affine evaluation of a block is a
+vector in $\F^\lambda$, not one packed element of $\F$:
+\begin{equation}\label{eq:typed}
+ \mathbf A_a=\sum_{s'=1}^M\alpha_{s'}\boldsymbol\sigma^{(0)}_{a,s'}
+ \in\F^\lambda,\qquad
+ \mathbf v_a=\mathbf A_a+\Delta\mathbf w_a.
+\end{equation}
+Here binary shares are embedded coordinatewise in $\F^\lambda$.
+This retains $t$ forests; it does not introduce a forest per bit.
+The research state's scalar-block notation must be interpreted this way
+to evaluate its bit selection polynomials at the advertised degree.
+If instead a $\lambda$-bit block is packed into a subfield, bit extraction is
+only $\Ftwo$-linear and generally does not commute with multiplication by
+$\alpha\in\F$. One would need different polynomial maps and a new degree
+analysis. We explicitly adopt the coordinatewise interpretation, as in the vector-valued evaluations in Huth--Joux Section 3.2.
+
+\paragraph{Random functions and serialization.}
+Reserve separate domains for tree expansion, leaf hashing, the global digest,
+and the two prospective Fiat--Shamir challenges. All inputs encode the
+protocol identifier, parameter encoding, salt, forest index, tree index,
+node position, and role where applicable. $\Ser$ is injective and
+length-delimited. A hash digest has $\ell$ bits. In the classical ROM these
+are independent random-function domains; in the QROM the domains permit
+superposition queries. Hash collision resistance alone is not a theorem
+about correlated-tree consistency or leakage.
+
+\section{Concrete correlated-forest algorithms}\label{sec:forest}
+We retain separate forests for the $t$ witness blocks, following the basic
+independent-forest idea of Huth--Joux Section 3.3 rather than their
+single-forest offset optimization. The tree-generation and puncturing
+rules below instantiate Sections 2.4 and 3.1 and Figures 3, 7, and 8.
+The extra leaf expansions for their $\mathbf y,z$, offsets, and associated
+consistency response are absent: every witness block here is the directly
+correlated part of its own forest. Whether those rules force malicious
+common-witness consistency is a separate question; see
+\cref{sec:pretreeattack} for a counterexample to that inference.
+
+\subsection{Node generation, numbering, and folds}
+All nodes are $\lambda$-bit strings. Tree $j=\mathsf{pre}$ has depth $\tau$;
+tree $j\in[\tau]$ has depth $D$. A node at level $l$ and position
+$p\in[2^l]$ is $T_{a,j}[l,p]$; level zero is unused. Given two level-one
+nodes $(r_0,r_1)$, define $\mathsf{Tree}(a,j,L,r_0,r_1)$ by setting
+$T[1,0]=r_0,T[1,1]=r_1$ and, for $1\leq l<L$, setting
+\begin{align}
+ T[l+1,2p]&=H_{\rm node}(\Ser(par,\mathsf{salt},a,j,l,p,T[l,p])),\label{eq:expand}\\
+ T[l+1,2p+1]&=T[l,p]\oplus T[l+1,2p].\nonumber
+\end{align}
+$H_{\rm node}$ has output length $\lambda$. There is no expansion of the
+unused root and no check involving a root value. To expand a disclosed
+subtree root, apply the same rule at its original absolute labels.
+The XOR of all descendants at any level equals the subtree-root value.
+
+For $y=(y_k)_{k\in[2^L]}$ define
+\[
+ \mathsf{Fold}_{r}^{(b)}(y)=\bigoplus_{k:\operatorname{bit}_r(k)=b}y_k,
+ \qquad 0\leq r<L,
+\]
+where $\operatorname{bit}_0$ is least significant. Thus the most significant
+fold ($r=L-1$) equals the two level-one nodes when folding generated leaves.
+
+\subsection{Generation and commitment}
+Sample $\mathsf{salt}\getsr\bits^{2\lambda}$ and independent
+$R_a\getsr\bits^\lambda$ for $1\leq a\leq t$.
+For each block $\mathbf w_a$:
+\begin{enumerate}
+\item Generate $T_{a,\mathsf{pre}}=\mathsf{Tree}
+(a,\mathsf{pre},\tau,R_a,R_a\oplus\mathbf w_a)$ with leaves $p_{a,k}$.
+\item For each $j\in[\tau]$ compute
+$r_{a,j}^{(b)}=\mathsf{Fold}_{j}^{(b)}(p_a)$ and generate
+$T_{a,j}=\mathsf{Tree}(a,j,D,r_{a,j}^{(0)},r_{a,j}^{(1)})$.
+Denote its leaves by $u_{a,j,k}$.
+\item Compute the binary share vectors and leaf digests
+\begin{align}
+ \boldsymbol\sigma_{a,j,r}^{(b)}
+    &=\mathsf{Fold}_{r}^{(b)}((u_{a,j,k})_k),\label{eq:fold}\\
+ C_{a,j,k}&=H_{\rm leaf}(\Ser(par,\mathsf{salt},a,j,k,u_{a,j,k})),\nonumber\\
+ \chi_{a,j}&=\bigoplus_k C_{a,j,k},\nonumber\\
+ B_{a,j,r}^{(b)}&=\mathsf{Fold}_{r}^{(b)}((C_{a,j,k})_k).\label{eq:hashfold}
+\end{align}
+$H_{\rm leaf}$ has $2\lambda$-bit output, retaining the explicit leaf
+commitment size used in Huth--Joux's basic Figure 3. We use its commitment
+output only, rather than its additional $\mathbf y,z$ expansion outputs.
+\end{enumerate}
+With lexicographic tuple order $(a,j,r,b)$, compute
+\begin{align}
+ d_{\rm com}&=H_{\rm com}\bigl(\Ser(par,\mathsf{salt},
+             (B_{a,j,r}^{(b)})_{a,j,r,b},(\chi_{a,j})_{a,j})\bigr),\nonumber\\
+ c&=(\mathsf{salt},(\chi_{a,j})_{a,j},d_{\rm com}).\label{eq:commitment}
+\end{align}
+Here $H_{\rm com}$ has output length $2\lambda$ (so $\ell=2\lambda$ for this
+instantiation). The global hash extends Figure 3's folded-commitment digest
+to all forest indices. Its parameter prefix and explicit serialization are
+specified domain-separation choices; this is not a verbatim transcription.
+Retain $aux=(x,i,\mathbf w,(T_{a,\mathsf{pre}},(T_{a,j})_j)_a,c)$;
+all folds can be recomputed. No input or hash query uses $X$.
+For honest generation,
+\begin{equation}\label{eq:total}
+ \bigoplus_k u_{a,j,k}=r_{a,j}^{(0)}\oplus r_{a,j}^{(1)}=\mathbf w_a,
+ \qquad
+ \boldsymbol\sigma_{a,j,r}^{(0)}\oplus
+ \boldsymbol\sigma_{a,j,r}^{(1)}=\mathbf w_a.
+\end{equation}
+These are honest invariants, not restrictions on a malicious committer.
+
+\subsection{Puncturing}
+For a tree of depth $L$ and leaf $k^*$, its punctured key consists of the
+$L$ sibling nodes along the path to $k^*$, one at each level $1,\ldots,L$.
+If $p_l=\lfloor k^*/2^{L-l}\rfloor$, the level-$l$ sibling is
+$T[l,p_l\mathbin{\mathsf{xor}}1]$. Node labels are implicit in $k^*$.
+
+Given $J=(k_j^*)_{j\in[\tau]}\in([2^D])^\tau$, set
+\begin{equation}\label{eq:prechallenge}
+ \eta_j=\operatorname{bit}_{D-1}(k_j^*),\qquad
+ p^*=\sum_{j=0}^{\tau-1}\eta_j2^j.
+\end{equation}
+For each forest $a$, $\Punc(aux,J)$ sends the full $\tau$-node
+pre-tree key punctured at $p^*$, and the second-level sibling nodes at
+levels $2,\ldots,D$ for each $j$.
+The omitted level-one sibling is recovered from pre-tree folding.
+Write the resulting response as
+\[
+ \rho=(K_{a,\mathsf{pre}},(K_{a,j}^{\rm trunc})_{j\in[\tau]})_{1\leq a\leq t}.
+\]
+It contains exactly $t(\tau+\tau(D-1))=tM$ node strings, including the
+boundary cases $D=1$ and $\tau=1$. No fresh opening randomness is sampled.
+
+\subsection{Reconstruction and rejection conditions}
+$\Rec(par,c,J,\rho)$ executes the following deterministic procedure.
+\begin{enumerate}
+\item Check the canonical encoding of $c,J,\rho$, all lengths and bounds,
+and the exact number of nodes; reject malformed or trailing data.
+For each $a$, expand the pre-tree sibling subtrees at their original labels.
+These partition $[2^\tau]\setminus\{p^*\}$; reject duplicate, missing,
+or unauthorized leaves. This is a structural parsing check.
+\item For each $j$ compute the known pre-tree half
+\[
+ \widehat r_{a,j}^{(1-\eta_j)}=
+ \bigoplus_{k:\operatorname{bit}_j(k)=1-\eta_j}p_{a,k}.
+\]
+Use it as the level-one sibling for tree $T_{a,j}$, together with
+$K_{a,j}^{\rm trunc}$ at levels $2,\ldots,D$.
+Expand these subtrees to reconstruct all leaves except $k_j^*$.
+Check the leaf partition as above. There is \emph{no additional root
+consistency test}: the missing path is never reconstructed, and no
+pre-tree digest appears in $c$.
+\item Compute hashes of all known leaves. Recover the missing leaf digest by
+\begin{equation}\label{eq:missinghash}
+ \widehat C_{a,j,k_j^*}=\chi_{a,j}\oplus
+                   \bigoplus_{k\ne k_j^*}C_{a,j,k}.
+\end{equation}
+Recompute both digest halves $B_{a,j,r}^{(b)}$ for every fold and recompute
+\cref{eq:commitment}. Reject if the digest differs from $d_{\rm com}$.
+An XOR-restored digest is not a verified preimage of the missing leaf.
+\item Set
+\begin{equation}\label{eq:knownbit}
+ e_{j,r}=1-\operatorname{bit}_r(k_j^*)
+\end{equation}
+and return
+$\boldsymbol\sigma_{a,j,r}^{(e_{j,r})}=\bigoplus_{k:
+\operatorname{bit}_r(k)=e_{j,r}}u_{a,j,k}$ for all $a,j,r$.
+Never insert a zero string for an unavailable leaf.
+\end{enumerate}
+This is the concrete reconstruction rule, rather than an idealized
+``valid linkage'' predicate. Figure 8 supplies no independent check of
+a pre-tree root or its missing-path node relations. That distinction
+is decisive for \cref{sec:pretreeattack}.
+
+\paragraph{Sizes and costs.}
+Excluding public parameters, $c$ has $2\lambda(t\tau+2)$ bits,
+$\rho$ has $t\tau D\lambda=tM\lambda$ bits, and $\pi_1$ has $d\kappa$
+bits. The first challenge has $(M+R)\kappa$ bits in the fully independent
+sampling specification; the second has $M$ bits. The opening vector itself
+has $nh$ bits. A PRG seed compression of the first challenge is a further
+computational variant, not part of the independent-challenge analysis.
+Generation and full verification involve $O(t(2^\tau+\tau2^D))$ tree
+nodes and leaf hashes, in addition to polynomial evaluation. Synchronized
+challenges save no punctured nodes across the independently generated forests.
+
+\subsection{What can and cannot be inherited}\label{sec:forestmissing}
+The source yields the XOR-preserving expansion, honest fold identities,
+the pre-challenge formula, and the compressed key layout above.
+Their honest correctness transfers by applying the same calculation
+independently to each $a$, with a common $J$ and $\boldsymbol\alpha$.
+Huth--Joux Section 3.4's $\mathbf y,z$ consistency test is specific to its
+offset extension; it is not a proof of arbitrary malicious consistency
+of this multi-forest commitment.
+Their Theorem 1 bounds NSBC protocol soundness, not commitment-time
+unique-witness binding. Their Theorem 2 and Appendix A concern signature
+unforgeability with classical random-oracle query lists; they do not
+state the online extraction target of this manuscript or a QROM theorem.
+The candidate changes the relation, challenge data, and first response.
+Neither theorem is invoked as a security theorem for this candidate.
+In particular, their root-counting discussion treats subset sums as distinct
+evaluation points; the distribution qualification in \cref{sec:sound} is
+needed for a rigorous adaptation.
+
+\section{Delayed relation and batching}\label{sec:relation}
+For each $k\in\{0,\ldots,2^q-1\}$ with bits $k_r$, define
+\begin{equation}
+ \ell_k(b)=\prod_{r=0}^{q-1}
+ \begin{cases}b_r&k_r=1,\\1+b_r&k_r=0.\end{cases}
+\end{equation}
+For Boolean $b$, these are indicator functions. Let $X\in(\bits^h)^n$ be
+chosen only after $c$ and fixed before any opening challenge. Set
+\begin{equation}\label{eq:selection}
+ P_{X,u}(z)=x_u+\sum_{k=0}^{n-1}X[k]_u\ell_k(b),
+ \qquad 0\leq u<h.
+\end{equation}
+On a correctly encoded witness, all these equations vanish precisely when
+$x=X[i]$. Their formal degree is at most $\max(1,q)$.
+
+\paragraph{Encoding constraints are necessary for malicious witnesses.}
+For a complete relation on $\F^K$, include the following constraints in addition
+to \cref{eq:selection}:
+\begin{align}
+ z_v^2+z_v&=0 &&(1\leq v\leq K),\label{eq:boolean}\\
+ z_v&=0 &&\text{for each padding position},\label{eq:padding}\\
+ P_{\rm range}(b):=\sum_{k=n}^{2^q-1}\ell_k(b)&=0
+ &&\text{if }n<2^q.\label{eq:range}
+\end{align}
+For Boolean $b$ exactly one selector is one, so \cref{eq:range} excludes
+out-of-range encodings, including when $x=0$.
+The Boolean constraints increase the degree bound to
+$d=\max(2,q)$. They are an explicit proposed completion, not an unnoticed
+change to the research state's bound. If a proved forest-extraction property
+guarantees a correctly encoded Boolean witness, they may be omitted; then
+the retained selection-only checker uses $d_0=\max(1,q)$.
+Raw bitstrings alone do not enforce index range or padding against malicious
+generation. Our algorithms support both publicly fixed modes:
+\emph{selection-only} and \emph{encoding-checked}. The mode is part of $par$.
+
+Enumerate the chosen constraints deterministically as $P_1,\ldots,P_R$.
+The verifier samples independently
+\begin{equation}\label{eq:challenges}
+ \boldsymbol\alpha\getsr\F^M,\qquad
+ \boldsymbol\beta\getsr\F^R,
+ \qquad P_\beta=\sum_{v=1}^R\beta_vP_v.
+\end{equation}
+The homogeneous degree bound $d$ is the public bound for the chosen mode,
+even when batching cancels top-degree coefficients. Do not choose $d$ from
+the resulting batched polynomial. Challenges may contain zero coefficients;
+no rank conditioning or resampling is built into the candidate.
+
+\begin{lemma}[Established algebra: fixed-witness batching]\label{lem:batch}
+Fix $X$ and $\mathbf w$ before sampling $\boldsymbol\beta$. If at least one
+$P_v(\mathbf w)\ne0$, then
+$\Pr[P_\beta(\mathbf w)=0]=Q^{-1}$.
+\end{lemma}
+\begin{proof}
+Choose a nonzero constraint value. Conditional on all other batching
+coefficients, exactly one choice of its independent uniform coefficient
+makes the sum zero.
+\end{proof}
+Fixing only $c$ is insufficient to invoke this lemma unless a consistency
+argument already fixes its witness independently of $\boldsymbol\beta$.
+
+\section{Affine evaluation and polynomial response}\label{sec:poly}
+Concatenate the blockwise folds into
+$\boldsymbol\sigma_{s'}^{(b)}\in\Ftwo^K$.
+The prover computes
+\begin{equation}
+ \mathbf A=\sum_{s'=1}^M\alpha_{s'}\boldsymbol\sigma_{s'}^{(0)}\in\F^K.
+\end{equation}
+After receiving $J$ and reconstructing the corresponding shares, the verifier
+computes
+\begin{equation}\label{eq:affine}
+ \Delta=\sum_{j,r}\alpha_{jD+r+1}e_{j,r},\qquad
+ \mathbf v=\sum_{j,r}\alpha_{jD+r+1}
+                 \boldsymbol\sigma_{jD+r+1}^{(e_{j,r})}.
+\end{equation}
+For honest folds, coordinatewise in characteristic two,
+\begin{equation}\label{eq:affineidentity}
+ \mathbf v=\mathbf A+\Delta\mathbf w.
+\end{equation}
+Synchronization gives one common scalar $\Delta$, not independent evaluation
+points for different forests. This is essential to the proposed polynomial check.
+
+Write $P_\beta(z)=\sum_{\nu:|\nu|\leq d}p_\nu z^\nu$.
+Its degree-$d$ homogenization is
+\begin{equation}\label{eq:hom}
+ \widetilde P_\beta(z,Z)=\sum_{\nu:|\nu|\leq d}p_\nu z^\nu Z^{d-|\nu|}.
+\end{equation}
+Compute as a formal polynomial, not by numerical interpolation on an
+undersized field,
+\begin{equation}\label{eq:phi}
+ \Phi(T)=\widetilde P_\beta(\mathbf A+T\mathbf w,T).
+\end{equation}
+
+\begin{lemma}[Established algebra: leading coefficient]\label{lem:leading}
+$\deg\Phi\leq d$ and $[T^d]\Phi=P_\beta(\mathbf w)$.
+In particular, if the batched constraint vanishes, $\deg\Phi\leq d-1$.
+\end{lemma}
+\begin{proof}
+For each monomial, the coefficient of $T^d$ in
+$(\mathbf A+T\mathbf w)^\nu T^{d-|\nu|}$ is $\mathbf w^\nu$.
+Sum with coefficients $p_\nu$. This is a formal identity in any field.
+\end{proof}
+The retained candidate sends the \emph{unmasked} coefficient vector
+\begin{equation}\label{eq:response}
+ \pi_1=(L_0,\ldots,L_{d-1}),\qquad
+ L(T)=\sum_{r=0}^{d-1}L_rT^r=\Phi(T).
+\end{equation}
+This is defined for honest valid inputs; the honest prover aborts if
+$P_\beta(\mathbf w)\ne0$. A malicious prover can send arbitrary coefficients.
+The verifier accepts its polynomial check exactly when
+\begin{equation}\label{eq:verify}
+ \widetilde P_\beta(\mathbf v,\Delta)=L(\Delta).
+\end{equation}
+The identity in \cref{lem:leading} is not an index-hiding argument; indeed
+\cref{sec:leak} shows why the whole coefficient vector is dangerous.
+
+\section{Complete interactive opening and verification algorithms}
+The following are complete for the polynomial and transcript layer, using the concrete generation, puncturing, and reconstruction procedures
+in \cref{sec:forest}.
+All messages are classical, even when the adversary is quantum.
+\begin{description}[style=nextline]
+\item[$\mathsf{Setup}(1^\lambda,h,n,\kappa,D,\tau,\mathsf{mode})$.]
+Check the restrictions in \cref{sec:types}; fix field representation,
+constraint enumeration, salt/digest lengths, all domains, and the forest
+algorithm identifier/version. Fix $s=\ell=2\lambda$ and the tree rules
+of \cref{sec:forest}. Output $par$, or $\bad$.
+\item[$\mathsf{Commit}(par,x,i)$.]
+Reject incorrect value length or $i\notin[n]$. Form $\mathbf w=\Enc(x,i)$;
+sample the common salt and independent forest coins; run the forest
+generation procedure and compute \cref{eq:hashfold,eq:commitment}.
+Output $(c,aux)$. Do not read $X$ or any challenge.
+\item[$\mathsf{OpenStart}(par,c,aux,X)$.]
+Check $aux$ belongs to $c$, $X$ contains exactly $n$ binary strings of length
+$h$, and $X[i]=x$. Abort otherwise. Fix $X$ and send it or register it as
+the public opening input. If an external party selects $X$, this registration
+still occurs before the first challenge. The validity test uses no new witness.
+\item[$\mathsf{Challenge}_1(par,c,X)$.]
+The honest verifier checks public encodings and lengths, enumerates the
+constraints for $X$, samples \cref{eq:challenges}, stores the session prefix,
+and sends $(\boldsymbol\alpha,\boldsymbol\beta)$.
+\item[$\mathsf{Respond}_1(par,aux,X,\boldsymbol\alpha,\boldsymbol\beta)$.]
+Reject malformed or wrong-length challenges. Compute $\mathbf A$, $P_\beta$,
+and $\Phi$ as in \cref{sec:poly}; abort if its leading coefficient is nonzero.
+Send exactly $d$ canonically encoded field elements $\pi_1$ and retain session
+state. No polynomial mask is added.
+\item[$\mathsf{Challenge}_2(par,c,X,\boldsymbol\alpha,\boldsymbol\beta,\pi_1)$.]
+Check the response length and field encodings. Sample independent uniform
+$k_j^*\getsr\bits^D$, store $J$, and send it. This sampling occurs strictly
+after $\pi_1$ is fixed and is independent of earlier coins.
+\item[$\mathsf{Respond}_2(par,aux,J)$.]
+Reject malformed $J$; output $\rho=\Punc(aux,J)$, using the same challenge
+in every forest. Puncturing is deterministic from fixed forest state and $J$.
+\item[$\mathsf{VerifySession}(par,c,X,\boldsymbol\alpha,
+\boldsymbol\beta,\pi_1,J,\rho;st_V)$.]
+Reject if any public parameter, message, or serialized field element is
+invalid, if any message has trailing data, or if the transcript does not
+match the verifier's recorded challenge/session state $st_V$.
+Run $\Rec$ and reject on any forest failure. Compute \cref{eq:affine},
+reconstruct $P_\beta$, and accept iff \cref{eq:verify} holds. Abort/time-out
+means rejection. A new opening uses fresh verifier challenges and the same
+committed auxiliary state; no reuse-hiding guarantee follows.
+\end{description}
+\paragraph{Public verification versus authentic challenges.}
+One may check the algebra of a recorded interactive transcript, but without
+authenticated challenge provenance this is not a sound noninteractive
+opening-verification algorithm. A prover could choose its own easy $J$.
+The state check above is part of the interactive experiment, not an extra
+cryptographic authenticator hidden inside $c$.
+
+\subsection{Honest correctness}
+\begin{proposition}[Honest correctness]
+Let the forests be honestly generated by \cref{sec:forest}, and let
+$\mathbf w=\Enc(x,i)$ with $X[i]=x$.
+Then the interactive opening accepts for every challenge value.
+\end{proposition}
+\begin{proof}
+Node expansion preserves XOR at every level, proving \cref{eq:total}.
+The pre-tree punctured key gives precisely the omitted level-one siblings;
+all other disclosed sibling subtrees partition the authorized leaves.
+The restored digest is therefore the honest missing digest and matches $c$.
+The selected constraints all vanish on $\mathbf w$, in either mode.
+Thus $P_\beta(\mathbf w)=0$ for every $\boldsymbol\beta$ and
+$\pi_1$ is well-defined by \cref{lem:leading}.
+Honest reconstruction passes the digest checks and gives
+\cref{eq:affineidentity}. Substitution at $T=\Delta$ proves
+\cref{eq:verify}, including $\Delta=0$. The latter case is correct but can
+be especially easy to exploit in a malicious transcript.
+\end{proof}
+
+\subsection{Prospective Fiat--Shamir variant: distinct and unproved}
+Let $ctx$ bind the application and its public statement. An explicit candidate
+derivation would be
+\begin{align}
+ (\boldsymbol\alpha,\boldsymbol\beta)
+ &=\mathsf{Sample}_1(H_{\rm FS1}(\Ser(par,ctx,c,X))),\nonumber\\
+ J&=\mathsf{Sample}_2(H_{\rm FS2}(\Ser(par,ctx,c,X,
+              \boldsymbol\alpha,\boldsymbol\beta,\pi_1))).\label{eq:fs}
+\end{align}
+The sampling functions use a domain-separated expandable oracle stream and
+canonical uniform field/bit sampling. The opening would contain $(\pi_1,\rho)$;
+verification recomputes both challenges. This is not the interactive protocol:
+the prover can grind $c$, $X$, and $\pi_1$, and requery the oracle.
+Interactive root bounds do not automatically prove ROM Fiat--Shamir security,
+and classical ROM security would not automatically prove QROM security.
+Most importantly, Fiat--Shamir cannot remove the coefficient leakage below.
+
+\section{Attack-oriented index-hiding analysis}\label{sec:leak}
+\subsection{Candidate-witness testing from one transcript}
+For each public index $i$, define $\mathbf w^{(i)}=\Enc(X[i],i)$.
+A verifier knows $\Delta$ and $\mathbf v$ from its reconstructed view and can
+compute, without any forest secret,
+\begin{equation}\label{eq:test}
+ F_i(T)=\widetilde P_\beta\bigl(\mathbf v+(T+\Delta)\mathbf w^{(i)},T\bigr).
+\end{equation}
+For the actual honest index $i^*$, \cref{eq:affineidentity} implies
+$F_{i^*}(T)=L(T)$ identically. Every candidate that fails this coefficient
+comparison is ruled out. This is an exact transcript test, even if the forest
+commitment alone is hiding and even if its punctured view is perfectly simulated.
+It is efficient in $n$ and the cost of polynomial computation; the opening
+already supplies $n$ entries. It does not require discrete logarithms, hash
+inversion, rewinding, or quantum queries.
+
+\subsection{Explicit four-entry distinguishing example}\label{sec:four}
+Work in selection-only mode with $n=4$, $h=1$, $q=2$, and $d=2$.
+Let $i=b_0+2b_1$ and
+\begin{equation}
+ X=(0,0,0,1),\qquad P(z)=x+b_0b_1,
+ \qquad\widetilde P(z,Z)=xZ+b_0b_1.
+\end{equation}
+Compare indices $0$ and $1$, both committing to the value $x=0$.
+Write the three relevant mask coordinates as $(A_x,A_0,A_1)$ and verifier
+coordinates as $(v_x,v_0,v_1)$. For a nonzero batching scalar $\beta$, divide
+the sent coefficients by $\beta$. Expanding gives
+\begin{equation}\label{eq:quad}
+ \Phi(T)=A_0A_1+(A_x+A_0b_1+A_1b_0)T
+                 +(x+b_0b_1)T^2.
+\end{equation}
+For the two candidate indices, $x=b_1=0$, and therefore
+\begin{equation}\label{eq:leak}
+ \beta^{-1}L_1=
+ \begin{cases}
+ v_x,&i=0,\\
+ v_x+v_1,&i=1.
+ \end{cases}
+\end{equation}
+When $v_1\ne0$, these are distinct. A verifier seeing $\beta\ne0$ and
+$v_1\ne0$ recovers the selected index with certainty, using only a single
+honest opening. Otherwise it can guess a fair bit. The event and test are public.
+
+\paragraph{Concrete constant-advantage attack.}
+The nonzero-mask event has constant probability under the actual honest
+forest generation, without a pseudorandomness assumption. Let $a$ be the
+index forest and $v_1$ its coordinate for $b_1$. The most significant
+pre-tree fold is $(R_a,R_a\oplus\mathbf w_a)$. Thus the second-level tree
+$j=\tau-1$ has left root $R_a$, and its most significant fold has
+$\boldsymbol\sigma_{a,\tau-1,D-1}^{(0)}=R_a$.
+With probability $1/2$, the $b_1$ coordinate of this share is one.
+Consequently the vector of $M$ binary zero-half shares for that coordinate
+is nonzero with probability at least $1/2$.
+Conditional on any nonzero such vector, uniform independent
+$\boldsymbol\alpha$ makes $A_1=v_1$ uniform over $\F$; here $b_1=0$
+in both challenge worlds. Independently $\Pr[\beta\ne0]=1-Q^{-1}$.
+A distinguisher applies \cref{eq:leak} on the separating event and guesses
+fairly otherwise. In the standard convention $\Pr[\text{correct}]-1/2$,
+its advantage is at least
+\begin{equation}\label{eq:advleak}
+ \frac14(1-Q^{-1})^2.
+\end{equation}
+The two challenge pairs commit to the same $x=0$, so this directly
+violates static single-opening index hiding, even against an honest verifier.
+The attack also applies in the classical ROM and the QROM.
+
+\paragraph{The optional encoding constraints do not repair this example.}
+If they are added with independent random batching coefficients, their
+homogenized Boolean contribution is $z_v^2+z_vZ$.
+On $\mathbf A+T\mathbf w$ with Boolean $\mathbf w$, its coefficient of $T$
+is $A_v$. Padding constraints, homogenized to degree two, also contribute
+$A_v$ to that coefficient. After subtracting the verifier-computable terms
+involving $v_v$, the coefficient has the form
+\begin{equation}
+ S=b_0(\beta v_1+\gamma_0\Delta),\label{eq:checkedleak}
+\end{equation}
+where $\gamma_0$ is the batching coefficient of the Boolean constraint for
+$b_0$ (there is no range constraint for $n=4$). Terms for other coordinates
+cancel or have zero witness coordinate in these two worlds.
+Explicitly, $S$ is $L_1$ plus $\beta v_x$ plus the sums of the Boolean
+and padding batching coefficients times their corresponding visible
+coordinates. The two indices remain distinguishable whenever the displayed multiplier
+is nonzero. Conditional on $(v_1,\Delta)\ne(0,0)$, its independent
+uniform coefficients make this multiplier nonzero with probability
+$1-Q^{-1}$. The same mask argument proves at least the bound in
+\cref{eq:advleak} for this mode as well.
+Adding encoding checks addresses relation validity, not masking
+of the polynomial response.
+
+\subsection{Why a simulator without the index is not yet defined}
+A simulator given only $X$ and the verifier's reconstructed affine view must
+produce $L$ whose joint distribution is compatible with both challenge
+witnesses. Equation~\eqref{eq:leak} makes the two supports disjoint on the
+nondegenerate event. Producing one accepting scalar equality at $\Delta$
+does not simulate the distribution of all coefficients. This distinguishes
+correctness/soundness checks from zero knowledge or index hiding.
+
+\subsection{Repeated puncturing leaks the committed witness}
+Even if the coefficient issue were repaired, fresh openings reuse the same
+forests. Suppose two honest challenges differ in a bit $e_{j,r}$. The verifier
+then obtains both halves of that fold, and for every forest $a$ recovers
+\begin{equation}
+ \mathbf w_a=\boldsymbol\sigma_{a,j,r}^{(0)}
+                       \oplus\boldsymbol\sigma_{a,j,r}^{(1)}.
+\end{equation}
+Equivalently, two different punctures of one tree reveal all its leaves.
+With independent uniform $J,J'$, there is a changed challenge bit with
+probability $1-2^{-M}$. Thus, for the concrete honest reconstruction procedure, two complete openings reveal all blocks of $\Enc(x,i)$ with that
+probability. Multi-opening \emph{binding} does not itself ask for multi-opening
+\emph{hiding}; applications must decide which they require.
+This extraction from two responses also does not prove online extraction
+from queries available before $c$.
+
+\section{Conditional polynomial soundness}\label{sec:sound}
+The useful algebraic bound is conditional on an adversarial commitment
+already determining common folds and a witness $\mathbf w$ before
+$\boldsymbol\beta$, with \cref{eq:affineidentity} valid for all accepted
+challenges. This is a substantive missing forest-consistency hypothesis.
+
+\subsection{The evaluation point is not automatically uniform in the field}
+Express the $\alpha_{s'}$ in the chosen binary field basis. For fixed
+$\boldsymbol\alpha$, let
+\begin{equation}
+ r(\boldsymbol\alpha)=\operatorname{rank}_{\Ftwo}
+       (\alpha_1,\ldots,\alpha_M),\quad
+ V_\alpha=\operatorname{span}_{\Ftwo}\{\alpha_1,\ldots,\alpha_M\}.
+\end{equation}
+Because independent uniform punctures make $e\in\bits^M$ uniform,
+$\Delta$ is uniform on $V_\alpha$, with point probability $2^{-r(\alpha)}$.
+It is uniform on $\F$ only if $r(\alpha)=\kappa$.
+For $M<\kappa$ this cannot occur. For $M\geq\kappa$,
+\begin{equation}
+ \Pr[r(\alpha)<\kappa]\leq(2^\kappa-1)2^{-M}
+\end{equation}
+by a union bound over nonzero dual linear functionals.
+
+\begin{proposition}[Conditional single-session bound]\label{prop:sound}
+Assume the fixed-witness/fixed-fold hypothesis above; let the chosen
+constraints fail on $\mathbf w$. For honest independent challenges and any
+degree-at-most-$(d-1)$ response fixed before $J$, acceptance probability is
+at most
+\begin{equation}\label{eq:bound}
+ \min\left\{1,\; Q^{-1}
+      +d\bigl(2^{-M}+(1-2^{-M})Q^{-1}\bigr)\right\}.
+\end{equation}
+For a fixed first-challenge prefix outside the batching-zero event, its
+second-challenge acceptance probability is at most
+$\min\{1,d\,2^{-r(\alpha)}\}$.
+\end{proposition}
+\begin{proof}
+Except with probability $Q^{-1}$, \cref{lem:batch} gives
+$P_\beta(\mathbf w)\ne0$. The residual
+$R(T)=\widetilde P_\beta(\mathbf A+T\mathbf w,T)-L(T)$
+then has nonzero leading coefficient and degree $d$, even if $\mathbf A$
+and $L$ depend on both first challenges. It has at most $d$ field roots.
+Conditional uniformity on $V_\alpha$ proves the fixed-prefix bound.
+For independent uniform $\alpha_{s'}$,
+\begin{align}
+ \mathbb E_\alpha[2^{-r(\alpha)}]
+ &=\Pr_{\alpha,e}\left[\sum_{s'}\alpha_{s'}e_{s'}=0\right]\nonumber\\
+ &=2^{-M}+(1-2^{-M})Q^{-1}.
+\end{align}
+The zero bit vector always yields zero; for any nonzero vector the sum is
+uniform over $\F$. Add the batching-zero probability. No independence of
+the adversary's residual polynomial from $\alpha$ is needed.
+\end{proof}
+This bound becomes useless when the degree is comparable to the span size.
+An invalid opening can have a negligible but nonzero acceptance probability;
+extraction must permit this soundness error rather than promise literal
+deterministic uniqueness for every possible accepting transcript.
+
+\subsection{Challenge dependencies and failure modes}
+If $X$ is selected after $\boldsymbol\beta$, the fixed-constraint batching
+argument does not apply. If $\pi_1$ is selected after $J$, a constant
+$L(T)=\widetilde P_\beta(\mathbf v,\Delta)$ always satisfies the final equality.
+If reconstructed $\mathbf v$ does not come from one committed affine line,
+root counting on that line proves nothing about malicious forests.
+If the prover selectively aborts depending on $J$, the bound applies to
+unconditional session success, not to success conditioned on completion.
+If $S$ sequential sessions each satisfy the same conditional bound, a union
+bound gives at most $S$ times that error for any invalid accepted opening;
+this does not justify concurrent sessions or Fiat--Shamir grinding without
+an additional argument.
+
+\section{Forest consistency, binding, and online extraction}\label{sec:binding}
+\subsection{Adaptive pre-tree keys do not force a common sum}\label{sec:pretreeattack}
+\begin{proposition}[Counterexample to pre-tree consistency]\label{prop:pretree}
+For any collection of honestly expanded second-level trees, whose root
+pairs and total XORs may be unrelated, a committer can compute $c$ in
+\cref{eq:commitment} before $J$ and, for every $J$, produce a response
+passing $\Rec$. It need not know one pre-tree linking these trees.
+The statement concerns forest acceptance, not the final polynomial test.
+\end{proposition}
+\begin{proof}
+Fix one forest $a$ and arbitrary root pairs $(r_j^{(0)},r_j^{(1)})$.
+Expand each second-level tree honestly, compute its hashes and all folds,
+and commit to these before $J$. After seeing $J$, its truncated tree keys
+are fixed. We must produce a pre-tree punctured key whose known fold $j$
+is the target $t_j=r_j^{(1-\eta_j)}$.
+
+For $\tau=2$, let $V=t_1$ be the disclosed opposite level-one node of
+the pre-tree. Write $\mathsf{child}_b(V)$ for its $b$ child under
+\cref{eq:expand} at that absolute position. Set the disclosed sibling
+leaf on the punctured side to
+\[
+ U=t_0\oplus\mathsf{child}_{1-\eta_0}(V).
+\]
+The known most significant fold is $V=t_1$, and the known least
+significant fold is $U\oplus\mathsf{child}_{1-\eta_0}(V)=t_0$.
+The punctured key $(V,U)$ therefore supplies precisely the two desired
+second-level root siblings, for all four $(\eta_0,\eta_1)$.
+No missing-path parent is disclosed or checked.
+
+For arbitrary $\tau$, construct the punctured-key siblings from top to
+bottom. At level $l$ let $r=\tau-l$, and let $E_{l-1}$ be the set of
+pre-tree leaves already reconstructed from earlier siblings.
+Set the new sibling value to
+\begin{equation}\label{eq:inversefold}
+ K_l=t_r\oplus
+ \bigoplus_{k\in E_{l-1}:\operatorname{bit}_r(k)=1-\eta_r}p_k.
+\end{equation}
+Expand it at its absolute position. All its descendants have bit $r$
+equal to $1-\eta_r$, and their XOR is $K_l$. All later siblings lie
+on the punctured side of this bit and cannot change the known fold.
+Thus the newly completed fold is $t_r$. Induction yields all $\tau$
+target folds. This costs at most the honest pre-tree expansion cost.
+
+Use these pre-tree keys and the actual truncated tree keys. Reconstruction
+now returns the originally committed second-level leaves except the
+punctures. Every restored hash and global digest is correct. Independent
+application to every $a$ proves the claim. No oracle collision, inversion,
+or programming is used.
+\end{proof}
+
+\paragraph{Consequence and scope.}
+For example, choose two second-level trees with respective sums $0^\lambda$
+and $10^{\lambda-1}$. Both are supported under one forest commitment for
+every challenge. Their binary shares cannot all sum to one witness block.
+Therefore the pre-tree does not certify the malicious-prover invariant
+\cref{eq:total}, despite the honest-generation linkage.
+This is an explicit counterexample to the research state's proposed
+structural consistency argument, using the actual basic puncturing layout.
+It does \emph{not} yet produce two polynomial-accepted incompatible opening
+vectors, nor refute every possible online extractor. A proof might instead
+extract several per-tree witnesses and analyze the polynomial test jointly.
+It cannot simply assume one common affine line because the keys are
+called correlated-forest keys.
+
+\paragraph{An acceptance-probability illustration.}
+Take $n=2$, $h=1$, selection-only mode ($d=1$), and one value forest
+with one tree having value bit $1$ and all remaining trees value bit $0$.
+All index-tree sums encode $0$; all unused bits are zero.
+For $X=(0,0)$ the polynomial is $P_\beta=\beta x$.
+Send $L_0=\beta A_x$ before $J$. The verifier's residual is
+$\beta\Delta_{j_*}$, where
+$\Delta_{j_*}=\sum_r\alpha_{j_*,r}e_{j_*,r}$ belongs to the exceptional
+tree. The forged pre-tree keys pass forest verification for every $J$.
+For $\beta\ne0$, averaged over the honest first challenge, the polynomial
+check accepts with probability
+\[
+ 2^{-D}+(1-2^{-D})Q^{-1},
+\]
+rather than a bound based on $2^{-M}$.
+A common witness $(0,0)$ is nevertheless compatible with this particular
+opening: this example refutes a claimed all-tree common-line proof, not
+the per-commitment binding game. It also shows why a commitment-time
+extractor cannot select an arbitrary exceptional tree and claim the
+stronger $M$-bit error bound for that choice.
+
+\subsection{A binding attack on the unchecked non-power-of-two extension}
+Take $n=3$, $h=1$, and $q=2$. In selection-only mode, a malicious prover
+can generate otherwise honest forests for the raw encoded bits $x=0$,
+$b_0=b_1=1$, corresponding to the excluded index $3$.
+All three in-range selectors vanish, so
+\begin{equation}
+ P_{X,0}(\mathbf w)=0\qquad\text{for every }X\in\bits^3.
+\end{equation}
+Consequently, conditional only on honest forest correctness for arbitrary
+raw block strings, it can answer both openings $X^{(0)}=(0,0,0)$ and
+$X^{(1)}=(1,1,1)$ correctly for every challenge. Their coordinate--value
+sets have empty intersection. Rejection of the excluded index in the honest
+$\mathsf{Commit}$ API does not restrict a malicious committer.
+This breaks per-commitment binding in that unchecked extension. It does
+\emph{not} attack the explicitly power-of-two selection relation in the
+research state. The encoding-checked mode's range constraint is a proposed
+correction for the extension, and must be proved sound against malicious
+forests rather than merely appended to an honest-execution argument.
+
+\subsection{Digest binding is a different property from witness consistency}
+The global digest authenticates folded hash data against alternative
+reconstructions, subject to a suitable random-oracle argument. Distinct
+leaf arrays can have identical folded digest XORs as linear data; proving
+that efficiently obtainable alternative leaf preimages cannot exploit
+this kernel requires more than the collision resistance of the outer hash. It does not,
+by itself, show that a maliciously generated collection has
+$\bigoplus_k u_{a,j,k}$ independent of $j$, or that it comes from a valid
+correlated pre-tree. Hashing arbitrary data cannot establish the algebraic
+relation that honest generation was meant to impose.
+
+\paragraph{Counterexample to omitting pre-tree linkage.}
+If a verifier merely accepts independent punctured second-level trees, a
+malicious committer can generate each from an arbitrary raw block sum
+$w_{a,j}$, with different sums in different trees, compute the same digest
+format honestly for those leaves, and open each tree consistently in isolation.
+Then the reconstructed evaluations satisfy
+\begin{equation}
+ \mathbf v_a=\mathbf A_a+
+ \sum_j\left(\sum_r\alpha_{jD+r+1}e_{j,r}\right)w_{a,j},
+\end{equation}
+which need not equal $\mathbf A_a+\Delta w_a$ for any common $w_a$.
+The explicit construction in \cref{prop:pretree} shows that, for forest
+acceptance, the actual pre-tree layout can also be satisfied by this
+independent-tree strategy. Additional polynomial or source-protocol
+checks may constrain it; their effect needs its own proof.
+
+\subsection{Interactive security experiments}
+\begin{definition}[Per-commitment multi-opening binding target]
+An efficient adversary outputs one $c$, then conducts polynomially many
+opening sessions with an honest verifier, choosing each $X^{(s)}$ after $c$
+and before that session's fresh first challenge. For the set $\mathcal S$ of
+accepted sessions define
+\begin{equation}
+ B_s=\{(i,X^{(s)}[i]):i\in[n]\}.
+\end{equation}
+The adversary wins if $\mathcal S\ne\varnothing$ and
+$\bigcap_{s\in\mathcal S}B_s=\varnothing$. Require negligible win probability.
+The experiment specifies sequential sessions; a concurrent version is a
+separate target. One accepted session alone cannot win.
+\end{definition}
+No fixed index is required across distinct commitments. This definition
+does not by itself provide an efficient extractor, nor a witness selected
+at commitment time independently of future challenges.
+Pairwise intersections are insufficient: for $n=3$, the vectors
+$(0,0,0)$, $(0,1,1)$, and $(1,0,1)$ have pairwise common coordinate--value
+pairs, but the intersection of all three corresponding sets is empty.
+
+\begin{definition}[Commitment-time classical online extraction target]
+An extractor gets $par,c$ and the classical oracle query/answer transcript
+$Q_{\leq c}$ at the moment $c$ is published, without rewinding the committer.
+It outputs $w^*\in\bits^h\times[n]$ or $\bad$ before $X$ is selected.
+In any polynomial subsequent sequential interaction with the honest verifier,
+require negligible probability of an accepted opening $X$ for which
+$w^*=\bad$ or $X[i^*]\ne x^*$.
+\end{definition}
+This permits nonextractable unopenable commitments. It does not require
+rejecting every arbitrary bitstring as a commitment at publication time.
+It is stronger than the preceding intersection game; a union bound over
+sessions gives the implication if extraction failure has the stated bound.
+
+\subsection{A classical extraction program, and its unproved steps}
+A natural program searches pre-commitment $H_{\rm com}$ queries for the
+serialized input matching $d_{\rm com}$, and associates leaf-hash and tree
+queries by the salt and all labels. If it obtains a coherent complete forest,
+it computes block XORs, checks common sums across trees, and applies $\Dec$.
+It must additionally prove all of the following:
+\begin{enumerate}
+\item a successfully openable $c$ has an appropriate digest query before publication,
+except with a quantified guessing probability;
+\item hash-fold inputs are linked to sufficiently many actual leaf preimages,
+not merely arbitrary XOR aggregates;
+\item some mechanism beyond the current pre-tree keys yields an appropriate
+commitment-time witness, or a list of per-tree candidates can be converted
+to one witness with a valid continuation bound; \cref{prop:pretree} rules
+out the simple common-block premise;
+\item a purported index block is valid; otherwise range/padding failures cannot
+be ignored because honest commitments happen to encode valid indices;
+\item the total extraction and search cost is polynomial in the query count and
+parameters, without relying on enumerating exponentially many possible trees.
+\end{enumerate}
+Querying the digest on arbitrary aggregates is easy; hence finding its
+preimage alone does not discharge the second or third items. Two-opening
+special extraction is not a substitute for the stipulated pre-$X$ extractor.
+All these extraction claims remain unresolved for the concrete candidate.
+
+\subsection{QROM distinction}
+A QROM adversary does not expose a classical list of queried inputs;
+measuring every query changes its computation. Thus the preceding transcript
+search is not a QROM extractor. Don, Fehr, Majenz, and Schaffner
+provide an extractable random-oracle simulator (Theorem 4.3) and early
+extraction results (Corollaries 4.7--4.8)~\cite{investigation:DFMS}.
+Their setting associates a public classical value $t$ with a relation
+$f(z,H(z))=t$, and quantifies both extraction and disturbance through
+relation-dependent parameters $\Gamma,\Gamma'$ and oracle query counts.
+It permits extracting immediately after $t$ is announced; it does not
+license reading quantum queries as a classical transcript.
+
+For the outer digest, a natural attempt is $f(z,h)=h$ and
+$t=d_{\rm com}$. Even a successful extraction here returns folded hash
+strings, not their leaf seeds, a correlated pre-tree, or the witness.
+A further extraction composition must link these XOR strings to oracle
+preimages and valid per-tree sums, account for its disturbance and cost,
+and then justify a single committed witness. The adaptive-key counterexample
+survives perfect extraction of all second-level trees, so this is also an
+algebraic gap, not just a QROM query-access difficulty.
+Huth--Joux Appendix A explicitly maintains classical query and answer
+lists and candidate witnesses. Its candidate search occurs during the
+forgery experiment, with final offsets available; it neither proves the
+pre-$X$ unique-witness claim here nor supplies a quantum-query analysis.
+The classical leakage in \cref{sec:leak} also applies against quantum
+adversaries; a QROM theorem cannot repair a classical information leak.
+
+\section{Index hiding and composition targets}\label{sec:composition}
+\paragraph{A single-opening hiding game.}
+The distinguisher chooses two pairs $(x_0,i_0),(x_1,i_1)$ before commitment.
+A hidden bit $b$ selects the honest commitment to $(x_b,i_b)$.
+After seeing $c$, the distinguisher chooses $X$ such that
+$X[i_0]=x_0$ and $X[i_1]=x_1$; failure of this common compatibility condition
+ends the experiment with an independent fair guess. It then receives an
+honest opening interaction, including the verifier's reconstructed view,
+and guesses $b$. A minimal target restricts it to honest challenge sampling;
+the malicious-verifier target lets it choose well-formed challenges.
+Require negligible advantage. Restricting to pairs $(X[i_0],i_0)$,
+$(X[i_1],i_1)$ and fixing $X$ in advance gives a weaker static game.
+The example in \cref{sec:four} already separates that static game under its
+explicit nondegeneracy condition. Commitment-only hiding is insufficient.
+Selective abort behavior must not reveal the selected pair.
+
+\paragraph{Commitment-only hiding is a separate target.}
+Require indistinguishability of the marginal commitments generated from any
+two legal pairs $(x_0,i_0),(x_1,i_1)$. The displayed coefficient attack uses
+the opening and does not by itself distinguish these marginals. A proof
+of their hiding would need the correlated-tree and leaf-hash distributions;
+none is supplied here. Conversely, the proposed full-opening hiding game
+would imply this marginal target for $n\geq2$: for distinct indices choose
+a vector compatible with both pairs and discard the opening. For equal
+indices and different values, use a hybrid through a third commitment
+pair at another index, with one compatible vector for each transition.
+This implication is a property of the security definitions, not a hiding
+proof for the insecure candidate.
+
+\paragraph{What per-commitment binding can support.}
+If an eventual compiler's extractor obtains enough accepted openings of one
+\emph{same} $c$, the intersection property supplies at least one common
+coordinate and value. If $n$ and the number of openings are polynomial, it
+can compute that intersection from the revealed vectors.
+This still requires a reduction showing that the openings are obtainable
+with appropriate challenge probabilities and correspond to the base
+protocol's special-soundness transcripts. An existential intersection gives
+neither a pre-challenge index nor a general quantum extractor.
+
+\paragraph{Why cross-commitment extraction is a distinct obligation.}
+Suppose a compiler uses $c_1,c_2$ and needs a common binding coordinate.
+Per-commitment binding permits $c_1$ to bind at index zero and $c_2$ to bind
+at index one, with no reason for them to share an index. This logical
+countermodel refutes an implication to cross-commitment consistency.
+It is not an attack on a fully specified compiler, which is not yet present.
+The distinction can be checked directly against revised Stacking Sigmas
+Definition 4 (pp.~12--13). For an adversarially chosen key $ck$, it forbids
+a polynomial set $\mathcal T$ of tuples $(v,v',r,r')$ for which
+\begin{equation}\label{eq:revisedbinding}
+ \left|\bigcup_{(v,v',r,r')\in\mathcal T}
+       \{j:v_j\ne v'_j\}\right|>\ell-t,
+ \quad
+ \mathsf{BindCom}(pp,ck,v;r)=\mathsf{BindCom}(pp,ck,v';r')
+\end{equation}
+for every tuple. Different tuples may correspond to different commitment
+values. Thus at least $t$ coordinates remain unchanged across \emph{all}
+listed pairs under that key. The adjacent prose contains an apparent
+$t-\ell$ sign typo; the displayed winning condition uses $\ell-t$.
+Avitabile et al. Definition 6's fixed-equivocation game explicitly combines
+two commitments under the same parameter pair, changing opposite positions
+in the two pairs~\cite{investigation:ABFV}.
+
+The revised hiding condition also equates a key/commitment/equivocated-opening
+distribution with direct binding commitment under another binding set and
+uniform opening randomness. It is stronger than a commitment-only index
+hiding condition. A new interactive primitive would need an appropriate
+transcript-level analogue, in addition to repairing the present separator.
+
+There is a useful limited positive observation: Theorem 5's one-level
+self-stacking special-soundness proof (p.~27) compares two openings of the
+\emph{same} first-message commitment. A per-commitment guarantee can provide
+a common coordinate in that particular step, if openings are genuinely
+sound and obtainable. The recursive stackability argument also needs its
+extended honest-verifier simulation, recyclable third-message distribution,
+and key consistency interfaces. Those requirements do not follow from this
+single extraction step. The threshold setting of Avitabile et al. needs
+linked binding positions across commitments; the countermodel above explains
+why its fixed-equivocation property cannot be supplied by the present target.
+No whole-compiler security theorem is inherited merely because the local
+two-opening argument has a common coordinate.
+
+\paragraph{Round structure matters.}
+The commitment opening has two verifier challenges and is not itself a
+three-move Sigma protocol. A stacking compiler must specify how
+\cref{eq:order} interacts with base-protocol challenges, polynomial responses,
+repeated openings, and any rewinding/quantum extraction. Declaring the
+commitment an equivocal primitive does not remove these messages.
+Even a successful binding proof would not establish the necessary hiding
+and composition properties.
+
+\section{A proposed masking interface, not an implemented repair}\label{sec:mask}
+QuickSilver Section 5, Figure 6, uses the same degree-$d$ leading-coefficient
+identity but additionally obtains a VOPE mask from its preprocessing
+functionality~\cite{CCS:YSWW21}. Its prover adds correlated random coefficients
+to the batched response, and the verifier adds the corresponding evaluation.
+Its hybrid-model security theorem does not instantiate that preprocessing
+from the present forests or prove security under our challenge order.
+This comparison identifies a substantive missing ingredient rather than a
+new degree-reduction technique.
+
+Concretely, a candidate correction would require a commitment-time auxiliary
+correlation with the following interface. The prover obtains a degree-at-most-
+$(d-1)$ polynomial $R(T)$ independent of the witness. At puncturing time the
+verifier obtains $B=R(\Delta)$, authenticated against that same earlier
+correlation. The prover would send $U(T)=\Phi(T)+R(T)$, and verification would
+check
+\[
+ \widetilde P_\beta(\mathbf v,\Delta)+B=U(\Delta).
+\]
+For privacy, conditional on the entire verifier view and $B$, the mask
+coefficients should have the uniform distribution over the affine space
+$\{R:R(\Delta)=B,\deg R<d\}$, up to a proved statistical or computational
+error. Then all candidate witnesses compatible with the same evaluation
+produce the same conditional distribution of $U$: addition by their
+$\Phi$ is a bijection between the corresponding affine spaces.
+This is a conditional algebraic simulation argument, not a simulation of
+the full forests or an implemented preprocessing construction.
+
+The correlation must be fixed before $X$ and before the polynomial response;
+$R(\Delta)$ cannot be supplied as an unauthenticated scalar after $J$, since
+that would let a prover make the final equality hold arbitrarily. Hiding of
+punctured keys, malicious correlation consistency, extraction, degree-dependent
+costs, and possible multi-opening leakage would all require new analysis.
+The retained candidate still sends unmasked $L$ and is insecure.
+
+\section{Proposed corrections and unresolved work}\label{sec:next}
+The following are candidates for discussion, not silently applied repairs.
+\begin{enumerate}
+\item Address the coefficient leak before proving index hiding. A possible
+direction is auxiliary, witness-independent masking material committed
+before $X$, enabling a simulator to hide the lower coefficients while
+preserving the final evaluation. Simply adding an arbitrary public low-degree
+polynomial to $L$ breaks verification unless the verifier has a matching
+authenticated mask evaluation. The required conditional interface is described in \cref{sec:mask}, but
+its implementation from the forests is not specified or proved here.
+\item Decide whether hiding is needed for more than one opening. If yes,
+fresh independent commitments alone are not a repair unless their witnesses
+are linked by a new proof; reusing punctured forests discloses their witness.
+\item Analyze the concrete puncturing counterexample and specify any proposed
+replacement consistency mechanism. Committing additional pre-tree data may
+help, but requires new opening, leakage, and extraction analysis.
+\item Confirm the coordinatewise lift, and choose explicitly between a
+proved valid-encoding extraction guarantee and the encoding-checked mode.
+For non-power-of-two $n$, range validity cannot be omitted without justification.
+\item Prove a commitment-time malicious-consistency/extraction statement
+before applying the conditional polynomial bound to arbitrary commitments.
+\item Use the revised stacking definitions to identify whether the intended
+compiler needs linked witnesses across distinct commitments. Specify
+its exact transcript before claiming a composition result.
+\end{enumerate}
+
+\paragraph{Suggested eventual research-state updates; not applied.}
+Record (i) the coefficient-testing identity and four-entry separator with
+its concrete constant-advantage bound; (ii) the two-opening witness disclosure;
+(iii) the distinction between packed blocks and coordinatewise extension-field
+evaluations; (iv) the encoding/range constraints and their degree cost;
+(v) the span-rank distribution of $\Delta$ and the conditional bound
+\eqref{eq:bound}; and (vi) the adaptive pre-tree-key counterexample and the resulting failure
+of structural common-witness consistency. Literature proof transfer
+does not establish the remaining cryptographic claims. The original conjectures about binding
+and online extraction have not become established results.
+
+\begin{center}
+\begin{tabular}{p{0.49\linewidth}p{0.41\linewidth}}
+\toprule
+Conclusion & Status\\
+\midrule
+Homogenization and affine correctness identities & Established algebra\\
+Coefficient-based candidate testing & Established algebra\\
+Index distinction when $\beta v_1\ne0$ & Established conditional separator\\
+Single-opening index hiding & Broken with constant advantage\\
+Two-opening witness recovery & Established for honest forests\\
+Polynomial soundness for a fixed affine witness & Conditional bound proved here\\
+Pre-tree enforcement of common forest sums & Refuted by explicit adaptive keys\\
+Classical commitment-time online extraction & Unresolved\\
+QROM extraction and Fiat--Shamir security & Unresolved\\
+Concrete forest algorithms / revised stacking comparison & Specified / technical sources inspected\\
+Full index hiding / complete secure stacking & Candidate insecure / compiler unresolved\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Validation and remaining proof obligations}\label{sec:validation}
+The manuscript uses explicit least-significant-bit folding and most-significant
+root-splitting conventions, with the pre-challenge in \cref{eq:prechallenge}
+connecting them. Field operations in polynomial checking are coordinatewise;
+XOR applies only to binary node strings or binary digest strings.
+The honest reconstruction proof includes $D=1$ and $\tau=1$.
+The security conclusions separate forest acceptance from full opening
+acceptance, and algebraic identities from cryptographic extraction claims.
+
+Deterministic computational checks used 8-bit node values and the same
+XOR-preserving rule (with domain-separated SHA-256 output truncation):
+398 complete challenge layouts across $(\tau,D)=(1,1),(1,3),(2,1),
+(2,3),(3,2),(4,2)$ passed both honest reconstruction and the adaptive
+pre-tree-key counterexample, including missing-digest reconstruction.
+In $\mathbb F_{16}$ with modulus $U^4+U+1$, 2,000 random valid-witness
+instances with $q=1,\ldots,4$ verified the formal leading coefficient
+and all 16 evaluation points. Exhaustive three-mask-coordinate checks
+verified the checked-mode separator for sampled challenge coefficients.
+The span-mass identity was checked exhaustively for $M=1,\ldots,4$
+over $\mathbb F_4$; the excluded-index example was checked on all eight
+three-entry binary opening vectors.
+The source was built with pdfLaTeX and Biber; references were resolved
+and the resulting PDF pages were rendered for visual inspection.
+These checks supplement the proofs; they do not establish cryptographic
+security for unbounded parameters or replace missing ROM/QROM reductions.
+The coefficient attack already contradicts the requested hiding target.
+The immediate research priority is a masking design with an authenticated
+mask evaluation, followed by a malicious-forest analysis that does not assume
+an uncommitted pre-tree enforces common sums. Neither modification has been
+adopted as a repaired construction in this manuscript.
 
 \printbibliography
-
-\appendix
-\section{Additional Proofs}\label{app:proofs}
-Proofs.
-
 \end{document}
