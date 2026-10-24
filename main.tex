@@ -1,5 +1,6 @@
 \documentclass[11pt]{article}
-% Formal specification of the insecure C0 candidate; investigation is in the linked Work report.
+
+% Packages
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage[margin=1in]{geometry}
@@ -8,18 +9,25 @@
 \usepackage{enumitem,booktabs,graphicx,algorithm,algpseudocode,xcolor}
 \usepackage[hidelinks]{hyperref}
 \usepackage[nameinlink,noabbrev]{cleveref}
+
+% Bibliography
 \usepackage[backend=biber]{biblatex}
 \addbibresource{cryptobib/abbrev3.bib}
 \addbibresource{cryptobib/crypto.bib}
 \addbibresource{investigation.bib}
+
+% Theorem environments
 \theoremstyle{plain}
 \newtheorem{theorem}{Theorem}[section]
 \newtheorem{lemma}[theorem]{Lemma}
 \newtheorem{proposition}[theorem]{Proposition}
 \newtheorem{corollary}[theorem]{Corollary}
 \theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
+
+% Math macros
 \newcommand{\secpar}{\lambda}
 \newcommand{\bits}{\{0,1\}}
 \newcommand{\getsr}{\mathrel{\overset{\$}{\leftarrow}}}
@@ -39,11 +47,17 @@
 \newcommand{\Ser}{\mathsf{ser}}
 \DeclarePairedDelimiter{\abs}{\lvert}{\rvert}
 \DeclarePairedDelimiter{\norm}{\lVert}{\rVert}
+
+% Algorithmic macros
 \setlist{nosep}
 \emergencystretch=2em
+
+% Title and author
 \title{Post-Quantum Stacking:\\C0 Formal Specification}
 \author{}
-\date{24 October 2026}
+\date{}
+
+
 \begin{document}
 \maketitle
 \begin{center}
