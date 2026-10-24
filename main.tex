@@ -50,27 +50,6 @@
 \textbf{C0 is insecure. It does not achieve index hiding.}\\[3pt]
 \href{https://github.com/j-schuldt/research-notes/blob/main/reports/Post-Quantum\%20Stacking/2026-10-24-c0-specification-and-investigation-cleanup.md}{Work report: preserved investigation, attacks, and limitations}
 \end{center}
-\begin{abstract}
-This document specifies the existing C0 delayed-relation candidate using
-correlated GGM forests and an unmasked polynomial response. It records
-parameters, algorithms, algebraic identities, and honest correctness only.
-The security investigation and provisional security targets are preserved in
-the linked Work report; no security theorem is asserted here.
-\end{abstract}
-
-\section{Construction identifier and transcript}\label{sec:scope}
-C0 identifies the candidate specified on 22 October 2026 in manuscript
-Git revision\\
-\texttt{1b2af63e1227100041a307f504ea1d3605084658}.
-The two public modes already specified there are retained below; the
-encoding-checked mode remains an optional proposed completion.
-The commitment is generated before the opening vector is known, with order
-\begin{equation}\label{eq:order}
- c\longrightarrow X\longrightarrow(\boldsymbol\alpha,\boldsymbol\beta)
- \longrightarrow\pi_1\longrightarrow J\longrightarrow\rho.
-\end{equation}
-All messages after $c$ belong to opening. There is no commitment key with a
-preselected binding coordinate in this candidate.
 
 \section{Parameters and types}\label{sec:types}
 Let $\lambda\geq1$ be the computational security parameter and the raw
@@ -368,6 +347,14 @@ The verifier accepts its polynomial check exactly when
 \end{equation}
 
 \section{Complete interactive opening and verification algorithms}
+The commitment is generated before the opening vector is known, with order
+\begin{equation}\label{eq:order}
+ c\longrightarrow X\longrightarrow(\boldsymbol\alpha,\boldsymbol\beta)
+ \longrightarrow\pi_1\longrightarrow J\longrightarrow\rho.
+\end{equation}
+All messages after $c$ belong to opening. There is no commitment key with a
+preselected binding coordinate in this candidate.
+
 The following are complete for the polynomial and transcript layer, using the concrete generation, puncturing, and reconstruction procedures
 in \cref{sec:forest}.
 All protocol messages are classical.
